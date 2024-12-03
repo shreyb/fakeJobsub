@@ -67,6 +67,7 @@ func run(args []string) error {
 	switch args[1] {
 	case "submit":
 		fmt.Printf("num = %d\n", *submitNum)
+		fmt.Printf("group = %s\n", *submitGroup)
 	case "list":
 		fmt.Printf("keys = %s\n", *listKeys)
 	}
