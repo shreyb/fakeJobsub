@@ -1,11 +1,85 @@
 package condor
 
-// Submit submits a certain number of jobs based on the config
-func (s *Schedd) Submit(numJobs int) {}
+import (
+	"fmt"
+	"time"
 
-// List returns a list of the jobs in the queue.  If keys are given, it will only return the values for those keys
-func (s *Schedd) List(keys ...string) {}
+	"fakeJobsub/db"
+)
+
+// DefaultSchedd is the default schedd whose backend is in the default db location
+var DefaultSchedd *Schedd
 
 // Schedd is a condor Schedd
 type Schedd struct {
+	db scheddDB
+}
+
+func init() {
+	DefaultSchedd = new(Schedd)
+	d, err := db.CreateOrOpenDB("")
+	if err != nil {
+		panic(err)
+	}
+	DefaultSchedd.db = d
+}
+
+// GetSchedd opens the underlying db.FakeJobsubDB for further operations
+func GetSchedd(filename string) (*Schedd, error) {
+	if filename == "" {
+		return DefaultSchedd, nil
+	}
+
+	s := new(Schedd)
+
+	d, err := db.CreateOrOpenDB(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	s.db = d
+	return s, nil
+}
+
+// Submit submits a certain number of jobs based on the config
+func (s *Schedd) Submit(group string, numJobs int) error {
+	cid, err := s.db.GetNextClusterID()
+	if err != nil {
+		return fmt.Errorf("could not submit job: %w", err)
+	}
+
+	if err = s.db.InsertJobIntoDB(cid, group, numJobs); err != nil {
+		return fmt.Errorf("could not submit job: %w", err)
+	}
+
+	// Fake some CPU-intensive activity
+	fmt.Printf("Submitting....\n\n")
+	time.Sleep(3 * time.Second)
+
+	fmt.Printf("Submitted %d jobs to cluster %d for group %s\n", numJobs, cid, group)
+
+	return nil
+}
+
+// List prints a list of the jobs in the queue.  If keys are given, it will only return the values for those keys.  It only allows filtering based on clusterID for simplicity in this demo
+func (s *Schedd) List(clusterID int, keys ...string) error {
+	rows, err := s.db.RetrieveJobsFromDB(clusterID, keys...)
+	if err != nil {
+		return fmt.Errorf("could not list jobs: %w", err)
+	}
+
+	// Mock some processing time
+	time.Sleep(2 * time.Second)
+
+	for _, row := range rows {
+		fmt.Println(row)
+	}
+	return nil
+}
+
+// scheddDB contains the methods needed to interact with a jobs database for job submission and jobs listing purposes
+type scheddDB interface {
+	InsertJobIntoDB(int, string, int) error
+	RetrieveJobsFromDB(int, ...string) ([]string, error)
+	GetNextClusterID() (int, error)
 }
