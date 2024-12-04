@@ -2,6 +2,8 @@ package condor
 
 import (
 	"fmt"
+	"os"
+	"path"
 	"time"
 
 	"fakeJobsub/db"
@@ -12,12 +14,13 @@ var DefaultSchedd *Schedd
 
 // Schedd is a condor Schedd
 type Schedd struct {
-	db scheddDB
+	Name string
+	db   scheddDB
 }
 
 func init() {
-	DefaultSchedd = new(Schedd)
-	d, err := db.CreateOrOpenDB("")
+	DefaultSchedd = &Schedd{Name: "DefaultSchedd"}
+	d, err := db.CreateOrOpenDB(DefaultSchedd.getFilename())
 	if err != nil {
 		panic(err)
 	}
@@ -25,14 +28,15 @@ func init() {
 }
 
 // GetSchedd opens the underlying db.FakeJobsubDB for further operations
-func GetSchedd(filename string) (*Schedd, error) {
-	if filename == "" {
+func GetSchedd(name string) (*Schedd, error) {
+	if name == "" {
 		return DefaultSchedd, nil
 	}
 
-	s := new(Schedd)
+	s := &Schedd{Name: name}
+	s.Name = name
 
-	d, err := db.CreateOrOpenDB(filename)
+	d, err := db.CreateOrOpenDB(s.getFilename())
 	if err != nil {
 		return nil, err
 	}
@@ -62,19 +66,20 @@ func (s *Schedd) Submit(group string, numJobs int) error {
 }
 
 // List prints a list of the jobs in the queue.  If keys are given, it will only return the values for those keys.  It only allows filtering based on clusterID for simplicity in this demo
-func (s *Schedd) List(clusterID int, keys ...string) error {
+func (s *Schedd) List(clusterID int, keys ...string) ([]string, error) {
 	rows, err := s.db.RetrieveJobsFromDB(clusterID, keys...)
 	if err != nil {
-		return fmt.Errorf("could not list jobs: %w", err)
+		return nil, fmt.Errorf("could not list jobs: %w", err)
 	}
 
 	// Mock some processing time
 	time.Sleep(2 * time.Second)
 
-	for _, row := range rows {
-		fmt.Println(row)
-	}
-	return nil
+	return rows, nil
+}
+
+func (s *Schedd) getFilename() string {
+	return path.Join(os.TempDir(), fmt.Sprintf("fakeJobsubSchedd_%s", s.Name))
 }
 
 // scheddDB contains the methods needed to interact with a jobs database for job submission and jobs listing purposes
