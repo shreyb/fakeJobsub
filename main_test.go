@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -62,10 +63,16 @@ func TestRun(t *testing.T) {
 		t.Errorf("Should have gotten nil error. Got %v instead", err)
 	}
 
-	// Test 8: Valid list, keys
+	// Test 8: Valid list, bad keys
 	args = []string{"fakeJobsub", "list", "--keys", "foo,bar,baz"}
+	if err := run(args); !strings.Contains(err.Error(), "invalid column: foo") {
+		t.Errorf("Should have gotten non-nil error. Got %v instead", err)
+	}
+
+	// Test 9: Valid list, good keys
+	args = []string{"fakeJobsub", "list", "--keys", "clusterid, group"}
 	if err := run(args); err != nil {
-		t.Errorf("Should have gotten nil error. Got %v instead", err)
+		t.Errorf("Should have gotten non-nil error. Got %v instead", err)
 	}
 
 }
