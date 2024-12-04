@@ -87,21 +87,18 @@ func (f FakeJobsubDB) InsertJobIntoDB(clusterID int, group string, num int) erro
 func (f FakeJobsubDB) RetrieveJobsFromDB(clusterID int, cols ...string) ([]string, error) {
 	lenCols := len(cols)
 	// Check our columns to make sure we don't have SQL injection attack.  If col is OK, then add a placeholder for the future query string
-	validCols := []string{"clusterId", "group", "num"}
-
-	var colPlaceholders string
-	colsAny := make([]any, 0, lenCols) // Need this later for dynamic SELECT col1, col2 FROM... type queries
+	validCols := []string{"clusterid", "group", "num"}
+	queryCols := make([]string, 0, len(cols))
 	for _, col := range cols {
 		if !slices.Contains(validCols, col) {
 			return nil, fmt.Errorf("invalid column: %s", col)
 		}
-		colPlaceholders += "? "
 
 		useCol := col
 		if col == "group" {
 			useCol = "grp"
 		}
-		colsAny = append(colsAny, any(useCol))
+		queryCols = append(queryCols, useCol)
 	}
 
 	jobRows := make([]string, 0)
@@ -151,13 +148,8 @@ func (f FakeJobsubDB) RetrieveJobsFromDB(clusterID int, cols ...string) ([]strin
 	// Want certain columns for all jobs
 	case lenCols > 0 && clusterID == 0:
 		jobRows = append(jobRows, strings.Join(cols, "\t")) // header
-		stmt, err := f.DB.Prepare("SELECT " + colPlaceholders + "FROM jobs;")
-		if err != nil {
-			return nil, err
-		}
-		defer stmt.Close()
-
-		rows, err := stmt.Query(colsAny...)
+		query := "SELECT " + strings.Join(queryCols, ", ") + " FROM jobs;"
+		rows, err := f.DB.Query(query)
 		if err != nil {
 			return nil, err
 		}
@@ -183,14 +175,14 @@ func (f FakeJobsubDB) RetrieveJobsFromDB(clusterID int, cols ...string) ([]strin
 	// Want certain columns for one cluster
 	case lenCols > 0 && clusterID > 0:
 		jobRows = append(jobRows, strings.Join(cols, "\t")) // header
-		stmt, err := f.DB.Prepare("SELECT " + colPlaceholders + "FROM jobs WHERE clusterid = ? ;")
+		stmt, err := f.DB.Prepare("SELECT " + strings.Join(queryCols, ", ") + " FROM jobs WHERE clusterid = ? ;")
 		if err != nil {
 			return nil, err
 		}
 		defer stmt.Close()
 
 		resultRow, resultRowPtrs := prepareAnyRowAndPointerSlice(lenCols)
-		if err := stmt.QueryRow(colsAny...).Scan(resultRowPtrs...); err != nil {
+		if err := stmt.QueryRow(clusterID).Scan(resultRowPtrs...); err != nil {
 			return nil, err
 		}
 
@@ -281,10 +273,22 @@ func populateRowStringFromAny(row []any) ([]string, error) {
 		case int:
 			s := strconv.Itoa(v)
 			rowStringSlice = append(rowStringSlice, s)
+		case int8:
+			s := strconv.Itoa(int(v))
+			rowStringSlice = append(rowStringSlice, s)
+		case int16:
+			s := strconv.Itoa(int(v))
+			rowStringSlice = append(rowStringSlice, s)
+		case int32:
+			s := strconv.Itoa(int(v))
+			rowStringSlice = append(rowStringSlice, s)
+		case int64:
+			s := strconv.Itoa(int(v))
+			rowStringSlice = append(rowStringSlice, s)
 		case string:
 			rowStringSlice = append(rowStringSlice, v)
 		default:
-			return nil, errors.New("invalid data type from row.  Should be int or string")
+			return nil, fmt.Errorf("invalid data type from row.  Should be int or string. Value is type %t", v)
 		}
 	}
 	return rowStringSlice, nil
