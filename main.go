@@ -5,6 +5,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
+
+	"fakeJobsub/condor"
 )
 
 var errParseFlags = errors.New("could not parse flags")
@@ -27,9 +30,12 @@ func run(args []string) error {
 	submitCmd := flag.NewFlagSet("submit", flag.ContinueOnError)
 	submitNum := submitCmd.Int("num", 1, "Number of jobs to submit")
 	submitGroup := submitCmd.String("group", "", "Group/Experiment")
+	submitVerbose := submitCmd.Bool("verbose", false, "Verbose mode")
 
 	listCmd := flag.NewFlagSet("list", flag.ContinueOnError)
 	listKeys := listCmd.String("keys", "", "Comma-separated list of keys to query")
+	listClusterID := listCmd.Int("clusterid", 0, "ClusterID to query")
+	listVerbose := listCmd.Bool("verbose", false, "Verbose mode")
 
 	// Map of our flagsets to their names.  Very contrived.  Gives us something like {"submit": submitCmd, "list": listCmd}
 	flagSetMap := make(map[string]*flag.FlagSet, 0)
@@ -56,25 +62,47 @@ func run(args []string) error {
 		return errParseFlags
 	}
 
-	if args[1] == submitCmd.Name() {
+	// Get our schedd
+	schedd, err := condor.GetSchedd("")
+	if err != nil {
+		return fmt.Errorf("could not get schedd: %w", err)
+	}
+
+	switch args[1] {
+	case submitCmd.Name():
 		if err := checkSubmitForGroup(*submitGroup); err != nil {
 			return errors.New("--group must be specified")
 		}
+
+		if *submitVerbose {
+			fmt.Printf("num = %d\n", *submitNum)
+			fmt.Printf("group = %s\n", *submitGroup)
+		}
+
+		if err := schedd.Submit(*submitGroup, *submitNum); err != nil {
+			return fmt.Errorf("could not submit job: %w", err)
+		}
+		fmt.Println("Submitted job(s) successfully")
+
+	case listCmd.Name():
+		if *listVerbose {
+			fmt.Printf("keys = %s\n", *listKeys)
+			fmt.Printf("clusterID = %d\n", *listClusterID)
+		}
+
+		keys := make([]string, 0)
+		if *listKeys != "" {
+			keysRaw := strings.Split(*listKeys, ",")
+			keys := make([]string, 0, len(keysRaw))
+			for _, key := range keysRaw {
+				keys = append(keys, strings.TrimSpace(key))
+			}
+		}
+
+		if err := schedd.List(*listClusterID, keys...); err != nil {
+			return fmt.Errorf("could not list jobs: %w", err)
+		}
 	}
 
-	// Remove later
-	fmt.Printf("Flag set: %s\n", args[1])
-	switch args[1] {
-	case "submit":
-		fmt.Printf("num = %d\n", *submitNum)
-		fmt.Printf("group = %s\n", *submitGroup)
-	case "list":
-		fmt.Printf("keys = %s\n", *listKeys)
-	}
-
-	return nil
-}
-
-func parseArgs(args []string) error {
 	return nil
 }
