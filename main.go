@@ -10,8 +10,12 @@ import (
 	"fakeJobsub/condor"
 )
 
-var errParseFlags = errors.New("could not parse flags")
-var errUsage = errors.New("usage called")
+var (
+	errParseFlags = errors.New("could not parse flags")
+	errUsage      = errors.New("usage called")
+)
+
+var schedds = []string{"schedd1", "schedd2"}
 
 func main() {
 	if err := run(os.Args); err != nil {
@@ -93,15 +97,20 @@ func run(args []string) error {
 		keys := make([]string, 0)
 		if *listKeys != "" {
 			keysRaw := strings.Split(*listKeys, ",")
-			keys := make([]string, 0, len(keysRaw))
+			keys = make([]string, 0, len(keysRaw))
 			for _, key := range keysRaw {
 				keys = append(keys, strings.TrimSpace(key))
 			}
 		}
 
-		if err := schedd.List(*listClusterID, keys...); err != nil {
+		rows, err := schedd.List(*listClusterID, keys...)
+		if err != nil {
 			return fmt.Errorf("could not list jobs: %w", err)
 		}
+		for _, row := range rows {
+			fmt.Println(row)
+		}
+
 	}
 
 	return nil
