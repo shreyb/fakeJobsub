@@ -14,14 +14,6 @@ import (
 
 const defaultFilename string = "/tmp/fakeJobsubDB"
 
-var createTable = `
-CREATE TABLE jobs (
-clusterid INTEGER UNIQUE NOT NULL PRIMARY KEY,
-group STRING NOT NULL,
-num INTEGER NOT NULL,
-);
-`
-
 // FakeJobsubDB is a DB for this fake app
 type FakeJobsubDB struct {
 	*sql.DB
@@ -31,6 +23,13 @@ type FakeJobsubDB struct {
 func CreateOrOpenDB(filename string) (FakeJobsubDB, error) {
 	var f FakeJobsubDB
 	var fn string
+
+	createTable := `
+CREATE TABLE jobs (
+clusterid INTEGER NOT NULL PRIMARY KEY, 
+grp STRING NOT NULL, 
+num INTEGER NOT NULL
+);`
 
 	fn = defaultFilename
 	if filename != "" {
@@ -97,7 +96,12 @@ func (f FakeJobsubDB) RetrieveJobsFromDB(clusterID int, cols ...string) ([]strin
 			return nil, fmt.Errorf("invalid column: %s", col)
 		}
 		colPlaceholders += "? "
-		colsAny = append(colsAny, any(col))
+
+		useCol := col
+		if col == "group" {
+			useCol = "grp"
+		}
+		colsAny = append(colsAny, any(useCol))
 	}
 
 	jobRows := make([]string, 0)
@@ -213,10 +217,19 @@ func (f FakeJobsubDB) GetNextClusterID() (int, error) {
 }
 
 func (f FakeJobsubDB) getMaxClusterID() (int, error) {
+	isEmpty, err := f.isJobsTableEmpty()
+	if err != nil {
+		return 0, err
+	}
+	if isEmpty {
+		return 1, nil
+	}
+
 	query := `
 		SELECT MAX(clusterid)
 		FROM jobs;
 		`
+
 	stmt, err := f.DB.Prepare(query)
 	if err != nil {
 		return 0, err
@@ -230,6 +243,20 @@ func (f FakeJobsubDB) getMaxClusterID() (int, error) {
 	}
 
 	return cid, nil
+}
+
+func (f FakeJobsubDB) isJobsTableEmpty() (bool, error) {
+	noRowsQuery := `
+		SELECT COUNT(clusterid)
+		FROM jobs;
+		`
+
+	var count int
+	err := f.DB.QueryRow(noRowsQuery).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count == 0, nil
 }
 
 // Utility functions
