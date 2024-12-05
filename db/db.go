@@ -102,7 +102,6 @@ func (f FakeJobsubDB) RetrieveJobsFromDB(clusterID int, cols ...string) ([]strin
 	}
 
 	jobRows := make([]string, 0)
-
 	// Now that we know that all the cols are valid, prepare our statement
 	// Note:  Yes we can make this more intelligent, but I didn't want to overcomplicate the logic, since this is supposed to be a simple demo
 	switch {
@@ -214,7 +213,7 @@ func (f FakeJobsubDB) getMaxClusterID() (int, error) {
 		return 0, err
 	}
 	if isEmpty {
-		return 1, nil
+		return 0, nil
 	}
 
 	query := `
