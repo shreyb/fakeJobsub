@@ -20,7 +20,7 @@ type Schedd struct {
 
 func init() {
 	DefaultSchedd = &Schedd{Name: "DefaultSchedd"}
-	d, err := db.CreateOrOpenDB(DefaultSchedd.getFilename())
+	d, err := db.CreateOrOpenDB(DefaultSchedd.getFilename(os.TempDir()))
 	if err != nil {
 		panic(err)
 	}
@@ -36,7 +36,7 @@ func GetSchedd(name string) (*Schedd, error) {
 	s := &Schedd{Name: name}
 	s.Name = name
 
-	d, err := db.CreateOrOpenDB(s.getFilename())
+	d, err := db.CreateOrOpenDB(s.getFilename(os.TempDir()))
 	if err != nil {
 		return nil, err
 	}
@@ -78,8 +78,8 @@ func (s *Schedd) List(clusterID int, keys ...string) ([]string, error) {
 	return rows, nil
 }
 
-func (s *Schedd) getFilename() string {
-	return path.Join(os.TempDir(), fmt.Sprintf("fakeJobsubSchedd_%s", s.Name))
+func (s *Schedd) getFilename(tempdir string) string {
+	return path.Join(tempdir, fmt.Sprintf("fakeJobsubSchedd_%s", s.Name))
 }
 
 // scheddDB contains the methods needed to interact with a jobs database for job submission and jobs listing purposes
