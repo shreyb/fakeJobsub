@@ -60,7 +60,7 @@ func (s *Schedd) Submit(group string, numJobs int) error {
 	fmt.Printf("Submitting....\n\n")
 	time.Sleep(3 * time.Second)
 
-	fmt.Printf("Submitted %d jobs to cluster %d for group %s\n", numJobs, cid, group)
+	fmt.Printf("Submitted %d jobs to cluster %d for group %s on schedd %s\n", numJobs, cid, group, s.Name)
 
 	return nil
 }
