@@ -86,15 +86,18 @@ func run(args []string) error {
 		}
 
 		// Pick a schedd based on --schedd
-		scheddName := *submitSchedd
-		if !slices.Contains(schedds, *submitSchedd) {
-			// randomly pick one
+		var scheddName string
+		switch {
+		case *submitSchedd == "":
+			// Randomly pick a schedd
+			scheddName = schedds[rand.Intn(len(schedds))]
+		case !slices.Contains(schedds, *submitSchedd):
+			// Randomly pick a schedd
 			fmt.Printf("Given schedd %s is not in the list of configured schedds: %v.  Picking one randomly.\n", *submitSchedd, schedds)
 			scheddName = schedds[rand.Intn(len(schedds))]
-		}
-		if scheddName == "" {
-			// randomly pick one
-			scheddName = schedds[rand.Intn(len(schedds))]
+		default:
+			// Use the schedd given
+			scheddName = *submitSchedd
 		}
 
 		schedd, err := condor.GetSchedd(scheddName)
