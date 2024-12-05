@@ -4,7 +4,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"math/rand"
 	"os"
+	"slices"
 	"strings"
 
 	"fakeJobsub/condor"
@@ -34,11 +36,13 @@ func run(args []string) error {
 	submitCmd := flag.NewFlagSet("submit", flag.ContinueOnError)
 	submitNum := submitCmd.Int("num", 1, "Number of jobs to submit")
 	submitGroup := submitCmd.String("group", "", "Group/Experiment")
+	submitSchedd := submitCmd.String("schedd", "", "schedd to submit to.  If blank, one will be randomly chosen")
 	submitVerbose := submitCmd.Bool("verbose", false, "Verbose mode")
 
 	listCmd := flag.NewFlagSet("list", flag.ContinueOnError)
 	listKeys := listCmd.String("keys", "", "Comma-separated list of keys to query")
-	listClusterID := listCmd.Int("clusterid", 0, "ClusterID to query")
+	listClusterID := listCmd.Int("clusterid", 0, "ClusterID to query. Must also specify --schedd.")
+	listSchedd := listCmd.String("schedd", "", "schedd to query from.  If blank, will query all configured schedds")
 	listVerbose := listCmd.Bool("verbose", false, "Verbose mode")
 
 	// Map of our flagsets to their names.  Very contrived.  Gives us something like {"submit": submitCmd, "list": listCmd}
@@ -54,7 +58,9 @@ func run(args []string) error {
 		return errUsage
 	}
 
-	flSet, ok := flagSetMap[args[1]]
+	subcommand := args[1]
+
+	flSet, ok := flagSetMap[subcommand]
 	if !ok {
 		fmt.Println("Invalid subcommand.  Must run fakeJobsub with the \"submit\" or \"list\" subcommand.")
 		submitCmd.Usage()
@@ -66,13 +72,8 @@ func run(args []string) error {
 		return errParseFlags
 	}
 
-	// Get our schedd
-	schedd, err := condor.GetSchedd("")
-	if err != nil {
-		return fmt.Errorf("could not get schedd: %w", err)
-	}
-
-	switch args[1] {
+	// Subcommand logic
+	switch subcommand {
 	case submitCmd.Name():
 		if err := checkSubmitForGroup(*submitGroup); err != nil {
 			return errors.New("--group must be specified")
@@ -81,17 +82,42 @@ func run(args []string) error {
 		if *submitVerbose {
 			fmt.Printf("num = %d\n", *submitNum)
 			fmt.Printf("group = %s\n", *submitGroup)
+			fmt.Printf("schedd = %s\n", *submitSchedd)
+		}
+
+		// Pick a schedd based on --schedd
+		scheddName := *submitSchedd
+		if !slices.Contains(schedds, *submitSchedd) {
+			// randomly pick one
+			fmt.Printf("Given schedd %s is not in the list of configured schedds: %v.  Picking one randomly.\n", *submitSchedd, schedds)
+			scheddName = schedds[rand.Intn(len(schedds))]
+		}
+		if scheddName == "" {
+			// randomly pick one
+			scheddName = schedds[rand.Intn(len(schedds))]
+		}
+
+		schedd, err := condor.GetSchedd(scheddName)
+		if err != nil {
+			return fmt.Errorf("could not get schedd: %w", err)
 		}
 
 		if err := schedd.Submit(*submitGroup, *submitNum); err != nil {
 			return fmt.Errorf("could not submit job: %w", err)
 		}
 		fmt.Println("Submitted job(s) successfully")
+		return nil
 
 	case listCmd.Name():
 		if *listVerbose {
 			fmt.Printf("keys = %s\n", *listKeys)
 			fmt.Printf("clusterID = %d\n", *listClusterID)
+			fmt.Printf("schedd = %s\n", *listSchedd)
+		}
+
+		// Stop and return an error if we specified --clusterid but not --schedd
+		if *listClusterID != 0 && *listSchedd == "" {
+			return errors.New("must set --schedd flag if --clusterid is specified")
 		}
 
 		keys := make([]string, 0)
@@ -103,15 +129,48 @@ func run(args []string) error {
 			}
 		}
 
-		rows, err := schedd.List(*listClusterID, keys...)
-		if err != nil {
-			return fmt.Errorf("could not list jobs: %w", err)
+		// We're running query on one schedd
+		if *listSchedd != "" {
+			if !slices.Contains(schedds, *listSchedd) {
+				return fmt.Errorf("invalid schedd: %s.  Please choose from valid schedds %v or do not set the --schedd flag", *listSchedd, schedds)
+			}
+
+			schedd, err := condor.GetSchedd(*listSchedd)
+			if err != nil {
+				return fmt.Errorf("could not get schedd: %w", err)
+			}
+
+			rows, err := schedd.List(*listClusterID, keys...)
+			if err != nil {
+				return fmt.Errorf("could not list jobs: %w", err)
+			}
+
+			// Print our rows
+			for _, row := range rows {
+				fmt.Println(row)
+			}
+			return nil
 		}
+
+		// Don't have specific schedd - query them all!
+		scheddObjs := make([]*condor.Schedd, 0, len(schedds))
+		for _, s := range schedds {
+			schedd, err := condor.GetSchedd(s)
+			if err != nil {
+				return fmt.Errorf("could not get schedd: %w", err)
+			}
+			scheddObjs = append(scheddObjs, schedd)
+		}
+		rows, err := listJobsFromSchedds(scheddObjs, keys...)
+		if err != nil {
+			return fmt.Errorf("could not list jobs from all schedds: %w", err)
+		}
+
+		// Print the rows!
 		for _, row := range rows {
 			fmt.Println(row)
 		}
-
+		return nil
 	}
-
 	return nil
 }
