@@ -1,7 +1,9 @@
 package condor
 
 import (
+	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -57,9 +59,40 @@ func TestGetSchedd(t *testing.T) {
 	})
 }
 
-func TestSubmit(t *testing.T) {}
+func TestSubmit(t *testing.T) {
+	name := "name"
+	group := "testgroup"
+	numJobs := 42
+	t.Setenv("TMPDIR", t.TempDir())
+
+	s, err := GetSchedd(name)
+	if err != nil {
+		t.Errorf("Failed to get test schedd: %s", err.Error())
+	}
+
+	if err := s.Submit(group, numJobs); err != nil {
+		t.Errorf("Failed to submit test jobs: %s", err.Error())
+	}
+
+	expectedHeader := "clusterid\tgroup\tnum"
+	expectedRow := fmt.Sprintf("1\t%s\t%d", group, numJobs)
+	expectedResult := []string{expectedHeader, expectedRow}
+	rows, err := s.db.RetrieveJobsFromDB(1)
+	if err != nil {
+		t.Errorf("Should have gotten nil error.  Got %v instead", err)
+	}
+
+	if !slices.Equal(rows, expectedResult) {
+		t.Errorf("Got wrong result.  Expected %v, got %v", expectedResult, rows)
+	}
+
+}
 
 func TestList(t *testing.T) {}
+
+func TestSubmitAndList(t *testing.T) {
+	// Submit a single job to a particular schedd, then list it and make sure we get the right thing
+}
 
 func TestGetFilename(t *testing.T) {
 	temp := t.TempDir()
