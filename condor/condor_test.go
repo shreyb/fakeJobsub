@@ -1,6 +1,7 @@
 package condor
 
 import (
+	"fakeJobsub/db"
 	"fmt"
 	"os"
 	"slices"
@@ -63,12 +64,15 @@ func TestSubmit(t *testing.T) {
 	name := "name"
 	group := "testgroup"
 	numJobs := 42
-	t.Setenv("TMPDIR", t.TempDir())
 
-	s, err := GetSchedd(name)
+	// Setup DB and schedd
+	s := &Schedd{Name: name}
+	s.Name = name
+	d, err := db.CreateOrOpenDB(s.getFilename(t.TempDir()))
 	if err != nil {
-		t.Errorf("Failed to get test schedd: %s", err.Error())
+		t.Errorf("Could not create test db: %s", err.Error())
 	}
+	s.db = d
 
 	if err := s.Submit(group, numJobs); err != nil {
 		t.Errorf("Failed to submit test jobs: %s", err.Error())
@@ -88,10 +92,80 @@ func TestSubmit(t *testing.T) {
 
 }
 
-func TestList(t *testing.T) {}
+func TestList(t *testing.T) {
+	// Setup DB
+	name := "test1"
+	s := &Schedd{Name: name}
+	s.Name = name
+	d, err := db.CreateOrOpenDB(s.getFilename(t.TempDir()))
+	if err != nil {
+		t.Errorf("Could not create test db: %s", err.Error())
+	}
+	s.db = d
+
+	if err := s.db.InsertJobIntoDB(42, "testgroup", 17); err != nil {
+		t.Errorf("Could not create row in test db: %s", err.Error())
+	}
+	if err := s.db.InsertJobIntoDB(43, "testgroup", 17); err != nil {
+		t.Errorf("Could not create row in test db: %s", err.Error())
+	}
+
+	// Now retrieve the value but only some columns, and one of the clusterids
+	t.Run("Valid result", func(t *testing.T) {
+		expectedHeader := ("clusterid\tgroup")
+		expectedRow := ("42\ttestgroup")
+		expectedResult := []string{expectedHeader, expectedRow}
+		result, err := s.List(42, "clusterid", "group")
+		if err != nil {
+			t.Errorf("Should have gotten nil error.  Got %v instead", err)
+		}
+		if !slices.Equal(expectedResult, result) {
+			t.Errorf("Got wrong result.  Expected %v, got %v", expectedResult, result)
+		}
+	})
+
+	// Try to get an invalid row
+	t.Run("Invalid result", func(t *testing.T) {
+		_, err = s.List(22)
+		if err == nil || !strings.Contains(err.Error(), "could not list jobs") {
+			t.Errorf("Got unexpected error. Expected error that indicated that jobs could not be listed; got %v", err)
+		}
+	})
+
+}
 
 func TestSubmitAndList(t *testing.T) {
 	// Submit a single job to a particular schedd, then list it and make sure we get the right thing
+	// Setup DB
+	name := "test1"
+	s := &Schedd{Name: name}
+	s.Name = name
+	d, err := db.CreateOrOpenDB(s.getFilename(t.TempDir()))
+	if err != nil {
+		t.Errorf("Could not create test db: %s", err.Error())
+	}
+	s.db = d
+
+	// Submit a job
+	group := "testgroup"
+	numJobs := 42
+	if err := s.Submit(group, numJobs); err != nil {
+		t.Errorf("Failed to submit test jobs: %s", err.Error())
+	}
+
+	// List that cluster
+	t.Run("Valid result", func(t *testing.T) {
+		expectedHeader := ("clusterid\tgroup\tnum")
+		expectedRow := ("1\ttestgroup\t42")
+		expectedResult := []string{expectedHeader, expectedRow}
+		result, err := s.List(1, "clusterid", "group", "num")
+		if err != nil {
+			t.Errorf("Should have gotten nil error.  Got %v instead", err)
+		}
+		if !slices.Equal(expectedResult, result) {
+			t.Errorf("Got wrong result.  Expected %v, got %v", expectedResult, result)
+		}
+	})
 }
 
 func TestGetFilename(t *testing.T) {
