@@ -171,7 +171,7 @@ func TestSubmitAndList(t *testing.T) {
 func TestGetFilename(t *testing.T) {
 	temp := t.TempDir()
 	s := Schedd{Name: "example"}
-	expected := temp + "/" + "fakeJobsubSchedd_example"
+	expected := temp + "/" + "fakeJobsubSchedd_example.db"
 
 	fn := s.getFilename(temp)
 	if fn != expected {
