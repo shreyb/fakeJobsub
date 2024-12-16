@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -13,7 +13,7 @@ import (
 	_ "github.com/mattn/go-sqlite3" // the sqlite driver
 )
 
-var defaultFilename string = path.Join(os.TempDir(), "fakeJobsubDB.db")
+var defaultFilename string = filepath.Join(os.TempDir(), "fakeJobsubDB.db")
 
 // FakeJobsubDB is a DB for this fake app
 type FakeJobsubDB struct {
