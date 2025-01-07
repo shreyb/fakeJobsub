@@ -3,7 +3,7 @@ package condor
 import (
 	"fmt"
 	"os"
-	"path"
+	"path/filepath"
 	"time"
 
 	"fakeJobsub/db"
@@ -79,7 +79,7 @@ func (s *Schedd) List(clusterID int, keys ...string) ([]string, error) {
 }
 
 func (s *Schedd) getFilename(tempdir string) string {
-	return path.Join(tempdir, fmt.Sprintf("fakeJobsubSchedd_%s", s.Name))
+	return filepath.Join(tempdir, fmt.Sprintf("fakeJobsubSchedd_%s.db", s.Name))
 }
 
 // scheddDB contains the methods needed to interact with a jobs database for job submission and jobs listing purposes
